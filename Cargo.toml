@@ -1,0 +1,22 @@
+[package]
+name = "rust_prime_sieve"
+version = "0.1.0"
+authors = ["Gillett Hernandez <gillett.hernandez@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+itertools = "0.9.0"
+rayon = "1.3.0"
+num_cpus = "1.12.0"
+num = "0.1.28"
+fixedbitset = "0.2.0"
+
+
+[profile.dev]
+opt-level = 0
+
+[profile.test]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
