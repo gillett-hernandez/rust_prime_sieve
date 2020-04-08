@@ -219,27 +219,28 @@ impl Into<Vec<u64>> for PrimeChunkIterator {
     }
 }
 
-fn bit_prime_sieve(limit: i64) -> PrimeChunkIterator {
-    let sqrt: i64 = (limit as f64).powf(0.5) as i64;
-    let estimated_capacity = (1 + sqrt) as usize;
-    let proto_chunk = generate_first_prime_bitset(estimated_capacity);
+fn bit_prime_sieve(limit: i64, chunk_size_bias: f32) -> PrimeChunkIterator {
+    let sqrt = (limit as f32).powf(0.5);
+    let chunk_size = (sqrt * chunk_size_bias) as usize;
+    let num_chunks = (limit as usize) / chunk_size;
+    let proto_chunk = generate_first_prime_bitset(chunk_size);
     let mut v = Vec::new();
     v.push(proto_chunk.clone());
     v.par_extend(
-        (1..(2 + sqrt))
+        (1..(1 + num_chunks))
             .into_par_iter()
-            .map(|i: i64| {
+            .map(|i: usize| {
                 generate_bitset_from(
-                    estimated_capacity as usize,
-                    i * sqrt,
-                    (1 + i) * sqrt,
+                    chunk_size,
+                    (i as i64) * (chunk_size as i64),
+                    (1 + i as i64) * (chunk_size as i64),
                     &proto_chunk,
                 )
             })
             .collect::<Vec<FixedBitSet>>(),
     );
 
-    PrimeChunkIterator::new(v, sqrt as usize, limit as usize)
+    PrimeChunkIterator::new(v, chunk_size, limit as usize)
 }
 
 fn main() -> std::io::Result<()> {
@@ -253,8 +254,8 @@ fn main() -> std::io::Result<()> {
         .unwrap();
     use std::time::Instant;
     let now = Instant::now();
-    let limit = 10_000_000_000;
-    let vec: Vec<u64> = bit_prime_sieve(limit).into();
+    let limit = 100_000_000;
+    let vec: Vec<u64> = bit_prime_sieve(limit, 32.0).into();
     println!(
         "calculated {} primes in {}ms",
         vec.len(),
@@ -263,7 +264,6 @@ fn main() -> std::io::Result<()> {
     let now = Instant::now();
     // let limit = 1000;
     let mut primes_file = BufWriter::new(File::create(format!("primes_to_{}.txt", limit))?);
-    let mut bytes_written = 0;
     for p in vec {
         if p > (limit as u64) {
             break;
@@ -271,7 +271,7 @@ fn main() -> std::io::Result<()> {
         primes_file.write_fmt(format_args!("{}\n", p))?;
     }
     primes_file.flush()?;
-    bytes_written = primes_file.seek(SeekFrom::Current(0))?;
+    let bytes_written = primes_file.seek(SeekFrom::Current(0))?;
     println!(
         "{} bytes written in {}ms",
         bytes_written,
@@ -293,7 +293,7 @@ mod tests {
         use std::time::Instant;
         let now = Instant::now();
         let limit = 1_000_000_000;
-        let vec: Vec<u64> = bit_prime_sieve(limit).into();
+        let vec: Vec<u64> = bit_prime_sieve(limit, 1.0).into();
         // let limit = 1000;
         let mut s = 0;
         for p in vec {
@@ -318,7 +318,7 @@ mod tests {
         use std::time::Instant;
         let now = Instant::now();
         let limit = 1_000_000;
-        let vec: Vec<u64> = bit_prime_sieve(limit).into();
+        let vec: Vec<u64> = bit_prime_sieve(limit, 1.0).into();
         // let limit = 1000;
         let mut s = 0;
         for p in vec {
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn test_into_100() {
         let limit = 100;
-        let vec: Vec<u64> = bit_prime_sieve(limit).into();
+        let vec: Vec<u64> = bit_prime_sieve(limit, 3.0).into();
         // let limit = 1000;
         let mut s = 0;
         for p in vec {
@@ -353,11 +353,11 @@ mod tests {
     #[test]
     fn test_into_1000() {
         let limit = 1000;
-        let vec: Vec<u64> = bit_prime_sieve(limit).into();
+        let vec: Vec<u64> = bit_prime_sieve(limit, 1.0).into();
         // let limit = 1000;
         let mut s = 0;
         for p in vec {
-            if p > limit as u64 {
+            if p >= limit as u64 {
                 break;
             }
             s += p;
@@ -366,12 +366,12 @@ mod tests {
                 println!("{}", p);
             }
         }
-        assert!(s == 76096);
+        assert!(s == 76096, "{}", s);
     }
     #[test]
     fn test_into_10000() {
         let limit = 10000;
-        let vec: Vec<u64> = bit_prime_sieve(limit).into();
+        let vec: Vec<u64> = bit_prime_sieve(limit, 1.0).into();
         // let limit = 1000;
         let mut s = 0;
         for p in vec {
@@ -392,7 +392,7 @@ mod tests {
     fn test_100() {
         let limit = 100;
         let mut s = 0;
-        for p in bit_prime_sieve(limit) {
+        for p in bit_prime_sieve(limit, 2.0) {
             if p > limit as u64 {
                 break;
             }
@@ -407,7 +407,7 @@ mod tests {
     fn test_1000() {
         let limit = 1000;
         let mut s = 0;
-        for p in bit_prime_sieve(limit) {
+        for p in bit_prime_sieve(limit, 1.0) {
             if p > limit as u64 {
                 break;
             }
@@ -423,7 +423,7 @@ mod tests {
     fn test_10000() {
         let limit = 10000;
         let mut s = 0;
-        for p in bit_prime_sieve(limit) {
+        for p in bit_prime_sieve(limit, 1.0) {
             if p > limit as u64 {
                 break;
             }
